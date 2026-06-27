@@ -8,7 +8,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 # আপনার ভেরিফাইড তথ্যসমূহ
 BOT_TOKEN = "8264008675:AAEHzakAXPZeNVZKWlvYHRWboyjAuUhg0QM"
-FOREX_CHAT_ID = "-1004292142406"  
+FOREX_CHAT_ID = "-1004319798911"  
 
 class DummyServer(BaseHTTPRequestHandler):
     def do_GET(self):
