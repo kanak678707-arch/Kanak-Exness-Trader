@@ -68,16 +68,20 @@ def calculate_cmf(df, period=20):
 def fetch_candles(ticker_symbol, interval, range_str):
     url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker_symbol}?range={range_str}&interval={interval}"
     headers = {'User-Agent': 'Mozilla/5.0'}
-    response = requests.get(url, headers=headers, timeout=10)
-    if response.status_code != 200: return None
-    result = response.json()['chart']['result'][0]
-    df = pd.DataFrame({
-        'Open': result['indicators']['quote'][0]['open'],
-        'High': result['indicators']['quote'][0]['high'],
-        'Low': result['indicators']['quote'][0]['low'],
-        'Close': result['indicators']['quote'][0]['close']
-    }, index=pd.to_datetime(result['timestamp'], unit='s')).dropna()
-    return df
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+        if response.status_code != 200: return None
+        result = response.json()['chart']['result'][0]
+        df = pd.DataFrame({
+            'Open': result['indicators']['quote'][0]['open'],
+            'High': result['indicators']['quote'][0]['high'],
+            'Low': result['indicators']['quote'][0]['low'],
+            'Close': result['indicators']['quote'][0]['close']
+        }, index=pd.to_datetime(result['timestamp'], unit='s')).dropna()
+        return df
+    except Exception as e:
+        print(f"Error fetching candles for {ticker_symbol}: {e}")
+        return None
 
 def generate_signals_for_all_strategies(ticker_symbol, display_name):
     signals_list = []
@@ -133,6 +137,25 @@ def generate_signals_for_all_strategies(ticker_symbol, display_name):
                 f"🎯 <b>TP3 (1:4 RR):</b> <code>{round(tp3_val, dec_places)}</code>\n"
                 f"🎯 <b>TP4 (1:5 RR):</b> <code>{round(tp4_val, dec_places)}</code>"
             )
+
+        # -------------------------------------------------------------------------
+        # 🛠️ MISSING INDICATORS CALCULATION FIXED (এখানে নতুন ইন্ডিকেটরগুলো যোগ করা হয়েছে)
+        # -------------------------------------------------------------------------
+        # ১. RSI ক্যালকুলেশন
+        rsi_vals = calculate_rsi(df_5m['Close'], 14)
+        
+        # ২. Bollinger Bands ক্যালকুলেশন (20 Period, 2 Standard Deviation)
+        sma_20 = df_5m['Close'].rolling(window=20).mean()
+        std_20 = df_5m['Close'].rolling(window=20).std()
+        bb_upper = sma_20 + (std_20 * 2)
+        bb_lower = sma_20 - (std_20 * 2)
+        
+        # ৩. MACD ক্যালকুলেশন (12, 26, 9)
+        macd_ema_12 = calculate_ema(df_5m['Close'], 12)
+        macd_ema_26 = calculate_ema(df_5m['Close'], 26)
+        macd_line = macd_ema_12 - macd_ema_26
+        macd_signal = calculate_ema(macd_line, 9)
+        # -------------------------------------------------------------------------
 
         # =========================================================================
         # 🔵 STRATEGY 1: BOLLINGER BANDS REVERSAL
@@ -233,7 +256,7 @@ threading.Thread(target=run_fake_server, daemon=True).start()
 try:
     startup_url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     bst_now = datetime.utcnow() + timedelta(hours=6)
-    startup_time = bst_now.strftime("%I:%M:%Y %p")
+    startup_time = bst_now.strftime("%I:%M %p")
     sessions_active = get_current_forex_sessions()
     
     startup_message = (
@@ -281,10 +304,10 @@ while True:
                 )
                 
                 requests.post(url, json={"chat_id": FOREX_CHAT_ID, "text": forex_message, "parse_mode": "HTML"}, timeout=10)
-                print(f"   🎯 Adaptive Signal Pushed: {display_name} via {sig['strategy']}")
+                print(f"    🎯 Adaptive Signal Pushed: {display_name} via {sig['strategy']}")
                 time.sleep(1.0)
                 
     except Exception as e:
         print(f"Loop error: {e}")
         
-    time.sleep(300)
+    time.sleep(300) # প্রতি ৩০০ সেকেন্ড (৫ মিনিট) পর পর স্ক্যান করবে
